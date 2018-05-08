@@ -6,7 +6,7 @@
 %%% @end
 %%% Created : 17. kwi 2018 17:54
 %%%-------------------------------------------------------------------
--module(pollution_server_tests).
+-module(pollution_server_sup_tests).
 -include_lib("eunit/include/eunit.hrl").
 -author("julia").
 -compile(export_all).
@@ -14,7 +14,8 @@
 %% API
 createMonitor_test() ->
   code:add_path("/media/sem4/Erlang/laby/lab2/src"),
-  true = (pollution_server:start()).
+  undefined = whereis(pollution_server),
+  pollution_server_sup:startSupervisor().
 createMonitor2_test() -> [] =
   dict:fetch_keys(pollution_server:getMonitor()).
 addStation1_test() ->
@@ -80,8 +81,7 @@ getDailyMean1_test() ->
   ok = pollution_server:addValue({12, 34}, {{2018,4,2}, {12,12,12}}, "PM10", 59),
   49.0 = pollution_server:getDailyMean({2018,4,2}, "PM10").
 getDailyMean2_test() ->
-  not_enough_data = pollution_server:getDailyMean({2018,4,1}, "PM2,5").
-getDailyMean3_test() ->
+  not_enough_data = pollution_server:getDailyMean({2018,4,1}, "PM2,5"),
   not_enough_data = pollution_server:getDailyMean({2017,4,1}, "PM10").
 getDeviation1_test() ->
   not_enough_data = pollution_server:getDeviation({2018,4,1}, 0, temp).
@@ -89,8 +89,16 @@ getDeviation2_test() ->
   ok = pollution_server:addValue("Asdf", {{2018,4,2}, {0,0,0}}, "PM11", 59),
   ok = pollution_server:addValue({56,78}, {{2018,4,1}, {1,0,0}}, "PM11", 39),
   ok = pollution_server:addValue({12,34}, {{2018,4,1}, {1,0,0}}, "PM11", 39),
-  ok = pollution_server:addValue("Qwerty", {{2018,4,2}, {0,0,0}}, "PM11", 59),
+  ok = pollution_server:addValue("Qwerty", {{2018,4,2}, {0,0,0}}, "PM11", 59).
+ getDeviation3_test() ->
   0.0 = pollution_server:getDeviation({2018,4,2}, 0, "PM11").
-stop_test() ->
-  ok = pollution_server:stop(),
-  undefined = whereis(pollution_server).
+crash_stop_test() ->
+  try pollution_server:crash() of
+    _ -> ok
+  catch
+    _ ->
+      true = lists:any(fun(X) -> X =:= pollution_server end, registered()),
+      [] = dict:fetch_keys(pollution_server:getMonitor()),
+      ok = pollution_server_sup:stopSupervisor(),
+      undefined = whereis(pollution_server)
+  end.
