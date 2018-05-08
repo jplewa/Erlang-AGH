@@ -43,20 +43,28 @@ addStation(Name, Coordinates, Monitor) ->
 
 % addValue/5 - dodaje odczyt ze s)tacji (współrzędne geograficzne lub nazwa stacji, data, typ pomiaru, wartość), zwraca zaktualizowany monitor;
 addValue(Station, Date, Type, Value, Monitor) ->
-  case ((stationExists(Station, Monitor)) andalso (not (measurementExists(Station, Date, Type, Monitor)))) of
-    true -> dict:append(getStation(Station, Monitor), #measurement{date = Date, type = Type, value = Value}, Monitor);
-      _ -> already_exists
+  case (stationExists(Station, Monitor)) of
+    true ->
+      case (measurementExists(Station, Date, Type, Monitor)) of
+        true -> already_exists;
+        false -> dict:append(getStation(Station, Monitor), #measurement{date = Date, type = Type, value = Value}, Monitor)
+        end;
+    false -> no_such_station
   end.
 
 % removeValue/4 - usuwa odczyt ze stacji (współrzędne geograficzne lub nazwa stacji, data, typ pomiaru),
 % zwraca zaktualizowany monitor;
 removeValue (Station, Date, Type, Monitor) ->
   case(stationExists(Station, Monitor)) of
-    true -> dict:append_list(getStation(Station, Monitor),
-      lists: filter(fun(X) -> ((X#measurement.date /= Date) or (X#measurement.type /= Type)) end,
-        dict:fetch(getStation(Station, Monitor), Monitor)),
-        dict:erase(getStation(Station, Monitor), Monitor));
-    false -> no_such_measurement
+    true ->
+      case (measurementExists(Station, Date, Type, Monitor)) of
+        true ->
+          NewList = lists:filter(fun(X) -> ((X#measurement.date /= Date) or (X#measurement.type /= Type)) end,
+            dict:fetch(getStation(Station, Monitor), Monitor)),
+          dict:update(getStation(Station, Monitor), fun(_) -> NewList end, dict:fetch(getStation(Station, Monitor), Monitor), Monitor);
+        false -> no_such_measurement
+        end;
+    false -> no_such_station
   end.
 
 % getOneValue/4 - zwraca wartość pomiaru o zadanym typie, z zadanej daty i stacji;
