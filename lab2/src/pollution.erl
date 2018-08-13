@@ -20,58 +20,66 @@
 createMonitor() -> dict:new().
 
 getStation(Station = {_,_}, Monitor) ->
-  hd(lists:filter(fun(X) -> X#station.coordinates=:= Station end, dict:fetch_keys(Monitor)));
-getStation(Station, Monitor) ->
-  hd(lists:filter(fun(X) -> X#station.name =:= Station end, dict:fetch_keys(Monitor))).
+  case lists:dropwhile(fun(X) -> X#station.coordinates /= Station end, dict:fetch_keys(Monitor)) of
+    [] -> no_such_station;
+    [X | _] -> X
+  end;
 
-stationExists(Station = {_,_}, Monitor) ->
-  lists:any(fun(X) -> X#station.coordinates =:= Station end, dict:fetch_keys(Monitor));
-stationExists(Station, Monitor) ->
-  lists:any(fun(X) -> X#station.name =:= Station end, dict:fetch_keys(Monitor)).
+getStation(Station, Monitor) ->
+  case lists:dropwhile(fun(X) -> X#station.name /= Station end, dict:fetch_keys(Monitor)) of
+    [] -> no_such_station;
+    [X | _] -> X
+  end.
 
 measurementExists(Station, Date, Type, Monitor) ->
-  lists: any(fun(X) -> ((X#measurement.date =:= Date) and (X#measurement.type =:= Type)) end,
-    dict:fetch(getStation(Station, Monitor), Monitor)).
+  case lists:dropwhile(fun(X) -> ((X#measurement.date /= Date) orelse (X#measurement.type /= Type)) end,
+    dict:fetch(Station, Monitor)) of
+    [] -> false;
+    _ -> true
+  end.
 
 % addStation/3 - dodaje do monitora wpis o nowej stacji pomiarowej (nazwa i współrzędne geograficzne), zwraca zaktualizowany monitor;
 
 addStation(Name, Coordinates, Monitor) ->
-  case ((stationExists(Name, Monitor)) or (stationExists(Coordinates, Monitor))) of
+  case ((getStation(Name, Monitor) /= no_such_station) orelse (getStation(Coordinates, Monitor) /= no_such_station)) of
     false -> dict:store(#station{name = Name, coordinates = Coordinates}, [], Monitor);
     _ -> already_exists
   end.
 
 % addValue/5 - dodaje odczyt ze s)tacji (współrzędne geograficzne lub nazwa stacji, data, typ pomiaru, wartość), zwraca zaktualizowany monitor;
 addValue(Station, Date, Type, Value, Monitor) ->
-  case (stationExists(Station, Monitor)) of
+  S = getStation(Station, Monitor),
+  case (S /= no_such_station) of
     true ->
-      case (measurementExists(Station, Date, Type, Monitor)) of
+      case (measurementExists(S, Date, Type, Monitor)) of
         true -> already_exists;
-        false -> dict:append(getStation(Station, Monitor), #measurement{date = Date, type = Type, value = Value}, Monitor)
+        false -> dict:append(S, #measurement{date = Date, type = Type, value = Value}, Monitor)
         end;
-    false -> no_such_station
+    false -> S
   end.
 
 % removeValue/4 - usuwa odczyt ze stacji (współrzędne geograficzne lub nazwa stacji, data, typ pomiaru),
 % zwraca zaktualizowany monitor;
 removeValue (Station, Date, Type, Monitor) ->
-  case(stationExists(Station, Monitor)) of
+  S = getStation(Station, Monitor),
+  case(S /= no_such_station) of
     true ->
-      case (measurementExists(Station, Date, Type, Monitor)) of
+      case (measurementExists(S, Date, Type, Monitor)) of
         true ->
-          NewList = lists:filter(fun(X) -> ((X#measurement.date /= Date) or (X#measurement.type /= Type)) end,
-            dict:fetch(getStation(Station, Monitor), Monitor)),
-          dict:update(getStation(Station, Monitor), fun(_) -> NewList end, dict:fetch(getStation(Station, Monitor), Monitor), Monitor);
+          NewList = lists:filter(fun(X) -> ((X#measurement.date /= Date) orelse (X#measurement.type /= Type)) end,
+            dict:fetch(S, Monitor)),
+          dict:update(S, fun(_) -> NewList end, dict:fetch(S, Monitor), Monitor);
         false -> no_such_measurement
         end;
-    false -> no_such_station
+    false -> S
   end.
 
 % getOneValue/4 - zwraca wartość pomiaru o zadanym typie, z zadanej daty i stacji;
 getOneValue(Station, Date, Type, Monitor) ->
-  case ((stationExists(Station, Monitor)) andalso (measurementExists(Station, Date, Type, Monitor))) of
-    true -> (hd(lists:filter(fun(X) -> ((X#measurement.date =:= Date) and (X#measurement.type =:= Type)) end,
-      dict:fetch(getStation(Station, Monitor), Monitor))))#measurement.value;
+  S = getStation(Station, Monitor),
+  case ((S /= no_such_station) andalso (measurementExists(S, Date, Type, Monitor))) of
+    true -> (hd(lists:filter(fun(X) -> ((X#measurement.date =:= Date) andalso (X#measurement.type =:= Type)) end,
+      dict:fetch(S, Monitor))))#measurement.value;
     false -> no_such_measurement
   end.
 
@@ -83,16 +91,17 @@ getMean(List) ->
 
 % getStationMean/3 - zwraca średnią wartość parametru danego typu z zadanej stacji;
 getStationMean(Station, Type, Monitor) ->
-  case (stationExists(Station, Monitor)) of
-    true ->  getMean([X#measurement.value || X <- dict:fetch(getStation(Station, Monitor), Monitor), X#measurement.type =:= Type ]);
-    false -> no_such_station
+  S = getStation(Station, Monitor),
+  case (S /= no_such_station) of
+    true ->  getMean([X#measurement.value || X <- dict:fetch(S, Monitor), X#measurement.type =:= Type ]);
+    false -> S
   end.
 
 % getDailyMean/3 - zwraca średnią wartość parametru danego typu, danego dnia na wszystkich stacjach;
 getDailyMean(Date, Type, Monitor) ->
-  getMean(lists:foldl(fun(X,Y) -> X ++ Y end, [],
-    lists:map(fun(Y) -> [ X#measurement.value || X <- dict:fetch(Y, Monitor), X#measurement.type =:= Type,
-      element(1, X#measurement.date) =:= Date ] end, dict:fetch_keys(Monitor)))).
+  getMean(lists:append(lists:map(fun (K) ->
+    [ V#measurement.value || V <- dict:fetch(K, Monitor), ((V#measurement.type =:= Type) andalso
+      (element(1, V#measurement.date) =:= Date))] end, dict:fetch_keys(Monitor)))).
 
 getDeviationHelper(List) ->
   case (length(List) < 2) of

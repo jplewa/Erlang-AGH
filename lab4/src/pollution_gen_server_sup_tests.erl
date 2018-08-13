@@ -87,9 +87,6 @@ getDeviation2_test() ->
   ok = pollution_gen_server:addValue({12,34}, {{2018,4,1}, {1,0,0}}, "PM11", 39),
   ok = pollution_gen_server:addValue("Qwerty", {{2018,4,2}, {0,0,0}}, "PM11", 59),
   0.0 = pollution_gen_server:getDeviation({2018,4,2}, 0, "PM11").
-backup_test() ->
-  Monitor = dict:fetch_keys(pollution_gen_server_backup:getBackupMonitor()),
-  Monitor = dict:fetch_keys(pollution_gen_server:getMonitor()).
 crash_test() ->
   try pollution_gen_server:crash() of
     _ -> ok

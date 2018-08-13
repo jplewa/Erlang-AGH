@@ -12,10 +12,11 @@
 -compile(export_all).
 
 %% API
+
 createMonitor_test() ->
   code:add_path("/media/sem4/Erlang/laby/lab2/src"),
   undefined = whereis(pollution_server),
-  pollution_server_sup:startSupervisor().
+  _Pid = pollution_server_sup:start().
 createMonitor2_test() -> [] =
   dict:fetch_keys(pollution_server:getMonitor()).
 addStation1_test() ->
@@ -99,6 +100,6 @@ crash_stop_test() ->
     _ ->
       true = lists:any(fun(X) -> X =:= pollution_server end, registered()),
       [] = dict:fetch_keys(pollution_server:getMonitor()),
-      ok = pollution_server_sup:stopSupervisor(),
+      ok = pollution_server_sup:stop(),
       undefined = whereis(pollution_server)
   end.

@@ -11,12 +11,14 @@
 
 %% API
 -import('pollution', [getStation/1, createMonitor/0, addStation/3, addValue/5, removeValue/4, getOneValue/4, getStationMean/3, getDailyMean/3, getDeviation/4]).
--export([start/0, stop/0, addStation/2, addValue/4, removeValue/3, getOneValue/3, getStationMean/2, getDailyMean/2, getDeviation/3, getMonitor/0, crash/0]).
+-export([start/0, start_link/0, stop/0, addStation/2, addValue/4, removeValue/3, getOneValue/3, getStationMean/2, getDailyMean/2, getDeviation/3, getMonitor/0, crash/0]).
 
 
 % client API
 
 start() -> register(pollution_server, spawn(fun() -> init() end)).
+
+start_link() -> register(pollution_server, Pid = spawn_link(fun() -> init() end)), Pid.
 
 stop() -> sendRequest({stop, self()}).
 
@@ -100,6 +102,6 @@ loop(Monitor) ->
     {getMonitor, Pid} ->
       Pid ! Monitor,
       loop(Monitor);
-    crashServer -> 1/0;
+    crashServer -> 1 = 0;
     _ -> loop(Monitor)
   end.

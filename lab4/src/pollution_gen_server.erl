@@ -20,9 +20,9 @@
 start() -> start_link(pollution:createMonitor()).
 start_link(InitValue) -> gen_server:start_link({local, pollution_gen_server},?MODULE,InitValue,[]).
 stop() -> gen_server:cast(pollution_gen_server, stop).
-addStation(Name, Coordinates) -> backup(gen_server:call(pollution_gen_server,{addStation, Name, Coordinates})).
-addValue(Station, Date, Type, Value) -> backup(gen_server:call(pollution_gen_server,{addValue, Station, Date, Type, Value})).
-removeValue(Station, Date, Type) -> backup(gen_server:call(pollution_gen_server, {removeValue, Station, Date, Type})).
+addStation(Name, Coordinates) -> gen_server:call(pollution_gen_server,{addStation, Name, Coordinates}).
+addValue(Station, Date, Type, Value) -> gen_server:call(pollution_gen_server,{addValue, Station, Date, Type, Value}).
+removeValue(Station, Date, Type) -> gen_server:call(pollution_gen_server, {removeValue, Station, Date, Type}).
 getOneValue(Station, Date, Type) -> gen_server:call(pollution_gen_server, {getOneValue, Station, Date, Type}).
 getStationMean(Station, Type) -> gen_server:call(pollution_gen_server, {getStationMean, Station, Type}).
 getDailyMean(Date, Type) -> gen_server:call(pollution_gen_server, {getDailyMean, Date, Type}).
@@ -42,7 +42,7 @@ handle_cast(crashServer, Monitor) ->
 
 handle_cast(stop, Monitor) -> {stop, normal, Monitor}.
 
-terminate(Reason, _Monitor) -> Reason.
+terminate(Reason, Monitor) -> backup(Monitor), Reason.
 
 handle_call({addStation, Name, Coordinates}, _From, Monitor) ->
   NewMonitor = pollution:addStation(Name, Coordinates, Monitor),
@@ -53,14 +53,14 @@ handle_call({addStation, Name, Coordinates}, _From, Monitor) ->
 
 handle_call({addValue, Station, Date, Type, Value}, _From, Monitor) ->
   NewMonitor = pollution:addValue(Station, Date, Type, Value, Monitor),
-  case ((NewMonitor =:= already_exists) or (NewMonitor =:= no_such_station)) of
+  case ((NewMonitor =:= already_exists) orelse (NewMonitor =:= no_such_station)) of
     true -> {reply, NewMonitor, Monitor};
     false -> {reply, ok, NewMonitor}
   end;
 
 handle_call({removeValue, Station, Date, Type}, _From, Monitor) ->
   NewMonitor = pollution:removeValue(Station, Date, Type, Monitor),
-  case ((NewMonitor =:= no_such_measurement) or (NewMonitor =:= no_such_station)) of
+  case ((NewMonitor =:= no_such_measurement) orelse (NewMonitor =:= no_such_station)) of
   true -> {reply, NewMonitor, Monitor};
   false -> {reply, ok, NewMonitor}
   end;
@@ -80,8 +80,8 @@ handle_call({getDeviation, Date, Hour, Type}, _From, Monitor) ->
 handle_call(getMonitor, _From, Monitor) ->
   {reply, Monitor, Monitor}.
 
-backup(Response) ->
-  case ((whereis(pollution_gen_server_backup) /= undefined) and (Response =:= ok)) of
-    true -> gen_server:cast(pollution_gen_server_backup, {setBackupMonitor, getMonitor()}), Response;
-    false -> Response
+backup(Monitor) ->
+  case ((whereis(pollution_gen_server_backup) /= undefined)) of
+    true -> gen_server:cast(pollution_gen_server_backup, {setBackupMonitor, Monitor}), ok;
+    false -> ok
   end.
